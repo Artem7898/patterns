@@ -549,4 +549,92 @@ for node in ast: node.accept(p)
 
 ---
 
+
+
+# FastAPI API Skeleton (Go-to Prod)
+
+**Стек:** FastAPI + SQLAlchemy (async) + Alembic + Redis (async) + Celery + JWT + Cursor Pagination + Idempotency + Rate limiting + ETag/Cache + 202+Jobs + Webhooks + Pytest.
+
+## 🚀 Быстрый старт (Ubuntu / macOS)
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# отредактируй DATABASE_URL / REDIS_URL при необходимости
+```
+
+БД/Redis локально через Docker:
+```bash
+docker compose up -d postgres redis flower
+```
+
+Инициализация БД (alembic):
+```bash
+alembic revision --autogenerate -m "init"
+alembic upgrade head
+```
+
+Запуск API:
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Celery воркер:
+```bash
+celery -A app.celery_app.celery_app worker -l info
+# Flower UI: http://localhost:5555
+```
+
+## 🔐 JWT
+- `POST /auth/token` (demo: `admin` / `admin`) → `access_token`.
+- Используй в последующих запросах: `Authorization: Bearer <token>`.
+
+## 🧾 Orders API (паттерны)
+- **Idempotency** (POST): `Idempotency-Key: <uuid>`
+- **Rate limit**: 10 req/min (демо) на IP/роут
+- **Cursor pagination (GET)**: `/v1/orders?limit=20&cursor=<cursor>`
+- **ETag/Cache**: `ETag` + `If-None-Match` → `304`
+
+```bash
+# создать заказ
+http POST :8000/v1/orders product_id=1 qty=2 "Authorization:Bearer $TOKEN" "Idempotency-Key:$(uuidgen)"
+
+# список с курсором
+http GET :8000/v1/orders "Authorization:Bearer $TOKEN"
+```
+
+## ⏳ Долгие задачи (202 + Location)
+```bash
+# запускаем экспорт
+http POST :8000/v1/jobs/export
+
+# получаем статус
+http GET :8000/v1/jobs/<job_id>
+```
+
+## 🔔 Вебхуки (подпись HMAC)
+- Endpoint: `POST /webhooks/vendor`
+- Заголовки: `x-signature`, `x-timestamp`.
+- Формула: `hex(hmac_sha256(secret, f"{ts}.{body}"))`.
+
+## 🧪 Тесты
+```bash
+pytest -q
+```
+
+## 📁 Архитектура
+```
+app/
+  api/          # роутеры (auth, orders, jobs, webhooks)
+  core/         # config, security, cache, rate_limit, idempotency, pagination
+  db/           # models, session (SQLAlchemy async)
+  infra/        # uow, repos, redis
+  services/     # бизнес-логика (use-cases)
+  tasks/        # Celery tasks
+```
+
+> В проде добавь: миграции версий, реальные модели пользователей, репозитории с бизнес-правилами, observability (OTel/Prometheus), retries/circuit-breakers на внешних интеграциях.
+
 © GoF каталог (23) адаптирован под Python 3. Паттерны — не самоцель: применяйте, когда они упрощают код и архитектуру.
